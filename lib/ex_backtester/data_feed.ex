@@ -80,6 +80,10 @@ defmodule ExBacktester.DataFeed do
     subscribers = Enum.reverse(state.subscribers)
 
     Enum.each(state.bars, fn bar ->
+      # Price authority first: the Broker must know today's price before
+      # any strategy is allowed to send it an order for today.
+      :ok = ExBacktester.Broker.mark(bar)
+
       Enum.each(subscribers, fn pid ->
         # Synchronous step: wait for each strategy to ack this bar.
         :ok = GenServer.call(pid, {:bar, bar}, @bar_timeout)

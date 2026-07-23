@@ -11,23 +11,24 @@ defmodule ExBacktester.Data.CSV do
 
   alias ExBacktester.Bar
 
-  @spec load!(Path.t()) :: [Bar.t()]
-  def load!(path) do
+  @spec load!(Path.t(), String.t()) :: [Bar.t()]
+  def load!(path, ticker) do
     path
     |> File.stream!()
     |> Stream.map(&String.trim/1)
     |> Stream.reject(&(&1 == ""))
     # drop header row
     |> Stream.drop(1)
-    |> Enum.map(&parse_line!/1)
+    |> Enum.map(&parse_line!(&1, ticker))
     # oldest bar first — the feed replays them in chronological order
     |> Enum.sort_by(& &1.date, Date)
   end
 
-  defp parse_line!(line) do
+  defp parse_line!(line, ticker) do
     case String.split(line, ",") do
       [date, open, high, low, close, volume] ->
         %Bar{
+          ticker: ticker,
           date: Date.from_iso8601!(date),
           open: parse_float!(open),
           high: parse_float!(high),
