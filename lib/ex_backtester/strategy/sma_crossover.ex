@@ -36,7 +36,7 @@ defmodule ExBacktester.Strategy.SmaCrossover do
   use GenServer
   require Logger
 
-  alias ExBacktester.Broker
+  alias ExBacktester.{Broker, DataFeed}
 
   # ── Client API ──────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ defmodule ExBacktester.Strategy.SmaCrossover do
   @impl true
   def init(opts) do
     state = %{
-      name: Map.fetch!(opts, :name),
+      name: Map.fetch!(opts, :name),    # `fetch!/2` mandates `:name` option
       ticker: Map.get(opts, :ticker, "SAMPLE"),
       fast_len: Map.get(opts, :fast, 10),
       slow_len: Map.get(opts, :slow, 30),
@@ -69,7 +69,7 @@ defmodule ExBacktester.Strategy.SmaCrossover do
   @impl true
   def handle_continue(:register, state) do
     :ok = Broker.open_account(state.name)
-    :ok = ExBacktester.DataFeed.subscribe(self())
+    :ok = DataFeed.subscribe(self())
     {:noreply, state}
   end
 
@@ -101,7 +101,7 @@ defmodule ExBacktester.Strategy.SmaCrossover do
     else
       fast = state.closes |> Enum.take(state.fast_len) |> mean()
       slow = mean(state.closes)
-      trend = if fast > slow, do: :up, else: :down
+      trend = if fast > slow, do: :up, else: :down  # Golden or Death Cross
 
       state
       |> act_on_crossing(state.trend, trend, bar)
