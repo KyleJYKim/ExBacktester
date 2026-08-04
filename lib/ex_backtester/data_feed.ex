@@ -1,32 +1,39 @@
 defmodule ExBacktester.DataFeed do
   @moduledoc """
-  Replays historical bars to subscribed strategies — the "market clock".
+  Replays historical bars to subscribed strategies -- the "market clock".
 
   ## The key design decision: synchronous stepping
 
-  Each bar is delivered to every subscriber with `GenServer.call/3`, NOT
-  `cast`. The feed does not move to bar N+1 until every strategy has
-  finished processing bar N and replied `:ok`.
+  Each bar is delivered to every subscriber with `GenServer.call/3`, NOT `cast`.
+  The feed does not move to bar N+1 until every strategy has finished processing bar N and replied `:ok`.
 
-  Why this matters: with `cast`, bars pile up in strategy mailboxes at
-  their own pace. Strategy A could be trading on bar 40 while Strategy B
-  is still computing bar 12 — and both are hitting the same Broker. Your
-  backtest results would silently depend on scheduler timing. In a
-  simulation, *determinism beats throughput*. This is the first real OTP
-  design trade-off in the project; sit with it for a minute.
+  Why this matters: with `cast`, bars pile up in strategy mailboxes at their own pace.
+  Strategy A could be trading on bar 40 while Strategy B is still computing bar 12 -- and both hitting the same Broker.
+  The backtest results would silently depend on scheduler timing.
+  In a simulation, "determinism beats throughput."
+  This is the first real OTP design trade-off in the project.
 
-  ## Deliberate fragility (for now)
+  ## Fault isolation
 
-  If a strategy crashes mid-run, the `call` to it raises and takes this
-  DataFeed down with it. That is left in on purpose — in week 3 you will
-  crash a strategy deliberately, watch the failure propagate, and then
-  decide how to contain it (catch the exit? check `Process.alive?`?
-  monitor and skip?). Don't fix it before you've seen it break.
+  A strategy that crashes on a bar must not take the feed down with it.
+  `run/0` dispatches to each subscriber inside a `try`; a subscriber that exits (crash) or times out is logged, dropped from the live set, and the run continues for everyone else.
+
+  Three containment designs were considered:
+
+    - `Process.alive?/1` before each call: a check-then-act race; the process can die between the check and the call. Rejected.
+    - moitor every subscriber, handle `:DOWN`: correct and the most "OTP" answer, but the run loop here is a single synchronous `call` pass, so catching the exit at the call site simpler and local.
+    - `try/catch` around each dispatch (chosen): the crash surfaces exactly where the feed depends on the strategy, so that is where it is handled.
+      A dropped subscriber cannot corrupt the others because each dispatch is independent.
+
+  Note this only isolates "the feed" from a strategy crash.
+  The strategy process itself is under a `DynamicSupervisor` and will be restarted per its child spec -- but with fresh state (its rolling window is gone), which is the correct question to sit with: for a backtest, is a restarted-empty strategy meaningful, or should a crashed strategy simply be excluded from the results?
+  Here it is excluded, which is the honest choice.
   """
 
   use GenServer
+  require Logger
 
-  alias ExBacktester.Bar
+  alias ExBacktester.{Broker, Bar}
 
   @bar_timeout 5_000
 
@@ -82,7 +89,7 @@ defmodule ExBacktester.DataFeed do
     Enum.each(state.bars, fn bar ->
       # Price authority first: the Broker must know today's price before
       # any strategy is allowed to send it an order for today.
-      :ok = ExBacktester.Broker.mark(bar)
+      :ok = Broker.mark(bar)
 
       Enum.each(subscribers, fn pid ->
         # Synchronous step: wait for each strategy to ack this bar.
