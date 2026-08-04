@@ -86,18 +86,44 @@ defmodule ExBacktester.DataFeed do
     # Subscribers were prepended; reverse for stable, insertion-order delivery.
     subscribers = Enum.reverse(state.subscribers)
 
-    Enum.each(state.bars, fn bar ->
-      # Price authority first: the Broker must know today's price before
-      # any strategy is allowed to send it an order for today.
-      :ok = Broker.mark(bar)
+    # Fault isolation: dispatch to each subscriber inside a try.
+    # A strategy that crashes on a bar must not take the feed (and the whole run) down with it
+    # -- that was the deliberate fragility left in during week 1.
+    # A crashed or timed-out subscriber is dropped and the run continues for everyone else.
+    # The alternative designs and why this one was chosen are in the moduledoc.
 
-      Enum.each(subscribers, fn pid ->
-        # Synchronous step: wait for each strategy to ack this bar.
-        :ok = GenServer.call(pid, {:bar, bar}, @bar_timeout)
+    final_subscribers =
+      Enum.reduce(state.bars, subscribers, fn bar, live ->
+        # Price authority first: the Broker must know today's price before any strategy is allowed to send it an order for today.
+        :ok = Broker.mark(bar)
+
+        Enum.filter(live, fn pid ->
+          try do
+            :ok = GenServer.call(pid, {:bar, bar}, @bar_timeout)
+            true
+          catch
+            :exit, reason ->
+              Logger.warning(
+                "DataFeed: dropping subscriber #{inspect(pid)} after #{inspect(reason)}"
+              )
+              false
+          end
+        end)
       end)
-    end)
 
-    {:reply, {:ok, length(state.bars)}, state}
+    {:reply, {:ok, length(state.bars)}, %{state | subscribers: final_subscribers}}
+    # Enum.each(state.bars, fn bar ->
+    #   # Price authority first: the Broker must know today's price before
+    #   # any strategy is allowed to send it an order for today.
+    #   :ok = Broker.mark(bar)
+
+    #   Enum.each(subscribers, fn pid ->
+    #     # Synchronous step: wait for each strategy to ack this bar.
+    #     :ok = GenServer.call(pid, {:bar, bar}, @bar_timeout)
+    #   end)
+    # end)
+
+    # {:reply, {:ok, length(state.bars)}, state}
   end
 
   @impl true
