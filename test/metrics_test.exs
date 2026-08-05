@@ -16,7 +16,7 @@ defmodule ExBacktester.MetricsTest do
 
     test "computes (last - first) / first" do
       # 100 -> 110 is +10%
-      assert_in_delta Metrics.total_return([100.0, 105.0, 110.0]), 1.10, 1.0e-9
+      assert_in_delta Metrics.total_return([100.0, 105.0, 110.0]), 0.10, 1.0e-9
     end
 
     test "handles a loss" do
@@ -38,7 +38,7 @@ defmodule ExBacktester.MetricsTest do
     test "computes each adjacent percentage change" do
       # 100 -> 110 = +0.10 ; 110 -> 99 = -0.10
       rs = Metrics.daily_returns([100.0, 110.0, 99.0])
-      assert_in_delta Enum.at(rs, 0), 1.10, 1.0e-9
+      assert_in_delta Enum.at(rs, 0), 0.10, 1.0e-9
       assert_in_delta Enum.at(rs, 1), -0.10, 1.0e-9
     end
   end
