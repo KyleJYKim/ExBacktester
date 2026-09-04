@@ -133,7 +133,7 @@ defmodule ExBacktester.Strategy.MeanReversion do
     if sd == 0.0, do: nil, else: (price - m) / sd
   end
 
-  defp mean(xs), do: Enum.sum(xs). / length(xs)
+  defp mean(xs), do: Enum.sum(xs) / length(xs)
 
   defp stddev(xs, m) do
     variance = Enum.reduce(xs, 0.0, fn x, acc -> acc + (x - m) * (x - m) end) / length(xs)
