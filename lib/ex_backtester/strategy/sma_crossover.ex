@@ -33,7 +33,7 @@ defmodule ExBacktester.Strategy.SmaCrossover do
     * `:qty`    — shares per order (default 100)
   """
 
-  use GenServer
+  use GenServer, restart: :temprorary # a restarted strategy has an empty rolling window, so it's silently computing a different indicator.
   require Logger
 
   alias ExBacktester.{Broker, DataFeed}

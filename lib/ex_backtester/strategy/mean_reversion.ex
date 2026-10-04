@@ -27,7 +27,7 @@ defmodule ExBacktester.Strategy.MeanReversion do
     - `:qty`    : shares per order (default 100)
   """
 
-  use GenServer
+  use GenServer, restart: :temporary
   require Logger
 
   alias ExBacktester.{Broker, DataFeed}

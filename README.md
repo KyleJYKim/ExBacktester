@@ -1,5 +1,7 @@
 # README.md
 
+![equity curves](priv/equity_curve.png)
+
 # Why does the Datafeed mark the Broker before dispatching the bar?
 Because the Broker is the price authority, and it can only be authoritative if it already know the price when an order arrives.
 A strategy's order is just `{:buy, "SAMPLE", 100}` — no price attached. So the Broker has to look one up from its own state, and `mark/1` is what puts it there. The dispatch that follows is what eventually causes the order, so marking has to come first.
@@ -94,7 +96,7 @@ This is also the cleanest illustration of why GenServer state fits here: the str
             state
     end
 `
-The strategy asks; it doesn't assume. A rejection (no cash, nothing to sell) is a normal backtest event, not an exceptino -- it's logged and the run continues. Note also that the strategy never touches cash or positions; it only appends the returned fill to its own local log for reporting.
+The strategy asks; it doesn't assume. A rejection (no cash, nothing to sell) is a normal backtest event, not an exception -- it's logged and the run continues. Note also that the strategy never touches cash or positions; it only appends the returned fill to its own local log for reporting.
 
 MeanReversion is the same skeleton. Same `push_close`, same warm-up guard, same submit-and-tolerate-rejection. Only two things differ: the function over the window (a z-score instead of two means) and the decision rule (`holding` boolean instead of `trend`). That symmetry is the payoff -- once you have one strategy process, a second one is a new decision rule dropped into an identical shape. That's how a real strategy framework grows, and it's what would make a third strategy a twenty-minute job rather than a redesign.
 
