@@ -10,7 +10,7 @@ defmodule ExBacktester.DataFeedFaultTest do
 
   # A minimal strategy that raises when it sees a close above a threshold.
   defmodule Crasher do
-    use GenServer
+    use GenServer, restart: :temporary
 
     def start_link(opts), do: GenServer.start_link(__MODULE__, Map.new(opts), name: Keyword.fetch!(opts, :name))
 
@@ -33,7 +33,7 @@ defmodule ExBacktester.DataFeedFaultTest do
 
   # A survivor that just counts bars, so we can prove it saw the whole run.
   defmodule Counter do
-    use GenServer
+    use GenServer, restart: :temporary
 
     def start_link(opts), do: GenServer.start_link(__MODULE__, Map.new(opts), name: Keyword.fetch!(opts, :name))
 

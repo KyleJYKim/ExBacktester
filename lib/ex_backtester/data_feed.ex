@@ -73,7 +73,7 @@ defmodule ExBacktester.DataFeed do
 
   @impl true
   def handle_call({:load, bars}, _from, state) do
-    {:reply, :ok, %{state | bars: bars}}
+    {:reply, :ok, %{state | bars: bars, subscribers: []}}
   end
 
   def handle_call({:subscribe, pid}, _from, state) do
