@@ -34,7 +34,7 @@ defmodule ExBacktester.Bench do
   def service_time(iterations \\1_000_000) do
     {:ok, state} = Broker.init(:ok)
     from = {self(), make_ref()}
-    {:reply, :ok, state} = Broker.handle_call({:open_account, :s}, from, state)
+    {:reply, :ok, state} = Broker.handle_call({:open_account, :s, [record_trades: false]}, from, state)
     {:reply, :ok, state} = Broker.handle_call({:mark, bar(1.0)}, from, state)
 
     # Warm up so the JIT / caches are in a steady state before timing.
@@ -50,9 +50,6 @@ defmodule ExBacktester.Bench do
   defp loop_service(state, from, n) do
     side = if rem(n, 2) == 0, do: :buy, else: :sell
     {:reply, {:ok, _}, state} = Broker.handle_call({:order, :s, side, @ticker, 1}, from, state)
-    # Drop the trade log so state does not grow across a million iterations;
-    # the real Broker's per-order cost is a prepend, which is O(1) anyway.
-    state = put_in(state.accounts[:s].trades, [])
     loop_service(state, from, n - 1)
   end
 
@@ -74,7 +71,7 @@ defmodule ExBacktester.Bench do
     measure_ms = Keyword.get(opts, :measure_ms, 3_000)
 
     accounts = for i <- 1..n, do: :"bench_#{n}_#{i}"
-    Enum.each(accounts, &Broker.open_account/1)
+    Enum.each(accounts, &Broker.open_account(&1, record_trades: false))
     :ok = Broker.mark(bar(1.0))
 
     start = now()

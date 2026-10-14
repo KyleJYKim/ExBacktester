@@ -55,10 +55,17 @@ defmodule ExBacktester.Broker do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  @doc "Open an account for a strategy. Idempotent."
-  @spec open_account(atom()) :: :ok
-  def open_account(strategy) do
-    GenServer.call(__MODULE__, {:open_account, strategy})
+  @doc """
+  Open an account for a strategy. Idempotent.
+
+  Options:
+    * `:record_trades` - keep every fill in the account's trade log (default `true`).
+      The benchmark turns this off: at hundreds of thousands of orders per second an unbounded log grows the Broker's heap without limit,
+      garbage collection gets slower, and the service time drifts upward during the run - the measurement would be studying the GC instead of the Broker.
+  """
+  @spec open_account(atom(), keyword()) :: :ok
+  def open_account(strategy, opts \\ []) do
+    GenServer.call(__MODULE__, {:open_account, strategy, opts})
   end
 
   @doc """
@@ -100,12 +107,13 @@ defmodule ExBacktester.Broker do
   end
 
   @impl true
-  def handle_call({:open_account, strategy}, _from, state) do
+  def handle_call({:open_account, strategy, opts}, _from, state) do
     accounts =
       Map.put_new(state.accounts, strategy, %{
         cash: @starting_cash,
         positions: %{},
-        trades: []
+        trades: [],
+        record_trades: Keyword.get(opts, :record_trades, true)
       })
 
     {:reply, :ok, %{state | accounts: accounts}}
@@ -168,7 +176,7 @@ defmodule ExBacktester.Broker do
         account
         | cash: account.cash - total,
           positions: Map.update(account.positions, ticker, qty, &(&1 + qty)),
-          trades: [fill | account.trades]
+          trades: record(account, fill)
       }
 
       {:ok, account, fill}
@@ -191,7 +199,7 @@ defmodule ExBacktester.Broker do
         account
         | cash: account.cash + gross - fee,
           positions: Map.put(account.positions, ticker, held - qty),
-          trades: [fill | account.trades]
+          trades: record(account, fill)
       }
 
       {:ok, account, fill}
@@ -207,4 +215,7 @@ defmodule ExBacktester.Broker do
       acc + qty * Map.get(prices, ticker, 0.0)
     end)
   end
+
+  defp record(%{record_trades: false} = account, _fill), do: account.trades
+  defp record(account, fill), do: [fill | account.trades]
 end
